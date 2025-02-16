@@ -2,14 +2,11 @@ import asyncio
 import aiohttp
 import time
 
-# 동시 요청 제한 설정 (예: 최대 20개 동시 요청)
 CONCURRENT_REQUESTS = 20
 
-# aiohttp 세마포어 (동시 요청 수 제한)
 wiki_semaphore = asyncio.Semaphore(CONCURRENT_REQUESTS)
 wikidata_semaphore = asyncio.Semaphore(CONCURRENT_REQUESTS)
 
-# ----- 비동기 Wikipedia 카테고리 크롤링 -----
 async def async_get_category_members(category: str, cmtype: str = "page", session: aiohttp.ClientSession = None) -> list:
     """
     주어진 카테고리에서 cmtype("page": 문서, "subcat": 하위 카테고리)에 해당하는 페이지들을 비동기적으로 가져옵니다.
@@ -35,7 +32,6 @@ async def async_get_category_members(category: str, cmtype: str = "page", sessio
 
         if "continue" in data:
             params["cmcontinue"] = data["continue"]["cmcontinue"]
-            # API 부담 최소화를 위해 짧은 딜레이 적용 (필요시 조정)
             await asyncio.sleep(0.05)
         else:
             break
@@ -60,7 +56,6 @@ async def async_get_all_celebrities(category: str, session: aiohttp.ClientSessio
             pages.extend(subpages)
     return pages
 
-# ----- 페이지의 pageprops 정보를 배치로 가져오기 (재시도 로직 포함) -----
 async def fetch_pageprops(pageids: list, session: aiohttp.ClientSession, retries=3) -> dict:
     """
     주어진 pageids에 대해 pageprops 정보를 가져옵니다.
@@ -84,7 +79,7 @@ async def fetch_pageprops(pageids: list, session: aiohttp.ClientSession, retries
         except Exception as e:
             print(f"fetch_pageprops 에서 예외 발생: {e}")
             break
-    return {}  # 실패 시 빈 딕셔너리 반환
+    return {}
 
 async def add_pageprops_to_pages(pages: list, session: aiohttp.ClientSession, batch_size: int = 50) -> list:
     """
@@ -103,7 +98,6 @@ async def add_pageprops_to_pages(pages: list, session: aiohttp.ClientSession, ba
         await asyncio.sleep(0.05)
     return list(pages_dict.values())
 
-# ----- 비동기 Wikidata 필터링 -----
 async def fetch_wikidata_entities(wikibase_ids: list, session: aiohttp.ClientSession) -> dict:
     """
     wikibase_ids 리스트(예: ['Q5', 'Q123', ...])에 대해 Wikidata 엔터티 정보를 비동기적으로 가져옵니다.
@@ -165,7 +159,6 @@ async def filter_human_pages_async(pages: list) -> list:
     tasks = []
     cache = {}
     async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=CONCURRENT_REQUESTS)) as session:
-        # 먼저 각 페이지에 대해 pageprops 정보를 추가합니다.
         pages = await add_pageprops_to_pages(pages, session, batch_size=BATCH_SIZE)
         for i in range(0, len(pages), BATCH_SIZE):
             batch = pages[i:i+BATCH_SIZE]
@@ -175,11 +168,9 @@ async def filter_human_pages_async(pages: list) -> list:
             human_pages.extend(res)
     return human_pages
 
-# ----- 메인 실행 함수 -----
 async def main():
     category_name = "Category:대한민국의_연예인"
     
-    # Wikipedia 카테고리 크롤링 (동시 요청 제한 적용)
     async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=CONCURRENT_REQUESTS)) as session:
         print("카테고리 내 페이지 및 하위 카테고리 탐색 중...")
         all_pages = await async_get_all_celebrities(category_name, session)
@@ -191,7 +182,6 @@ async def main():
     elapsed = time.time() - start_time
     print(f"인간으로 판별된 페이지: {len(human_pages)}개, 필터링 시간: {elapsed:.2f}초")
 
-    # 중복 제거 후 페이지 제목 정렬
     celebrity_names = sorted({page["title"] for page in human_pages})
     print(f"총 {len(celebrity_names)}명의 대한민국 연예인 이름을 찾았습니다.")
 
